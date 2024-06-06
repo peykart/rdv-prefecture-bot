@@ -1,15 +1,43 @@
-const express = require("express");
-const { scrapeLogic } = require("./scrapeLogic");
+const express = require('express');
+const Page = require('./modules/page');
+const Recaptcha = require('./modules/recaptcha');
 const app = express();
 
 const PORT = process.env.PORT || 4000;
 
-app.get("/scrape", (req, res) => {
-  scrapeLogic(res);
+app.get('/api', (req, res) => {
+  try {
+    const page = new Page(URI);
+
+    page.create().then(() => {
+      const recaptcha = new Recaptcha(page.page, page.browser);
+      // 1) Verify if recaptcha is required
+      recaptcha.checkRecaptchaRequired().then((recaptchaRequired) => {
+        // Close the page and browser when done
+        if (recaptchaRequired) {
+          // 2) If recaptcha is required, solve it
+          recaptcha.requestRecaptchaResolution().then(async (captchaId) => {
+            new Promise((resolve) => setTimeout(resolve, 50000)).then(() => {
+              console.log('Solving recaptcha...');
+              recaptcha.solveRecaptcha(page.checkAppointmentAvailability, res);
+            });
+          });
+        }
+      });
+    });
+  } catch (error) {
+    console.error('Error creating page:', error);
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Error creating page.',
+      error: error,
+    });
+  }
 });
 
-app.get("/", (req, res) => {
-  res.send("Render Puppeteer server is up and running!");
+app.get('/', (req, res) => {
+  res.send('Render Puppeteer server is up and running!');
 });
 
 app.listen(PORT, () => {
