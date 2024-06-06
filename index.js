@@ -8,8 +8,9 @@ const URI =
   'https://www.rdv-prefecture.interieur.gouv.fr/rdvpref/reservation/demarche/4083/cgu/?error=errorSessionInvalide';
 
 app.get('/api', (req, res) => {
+  const {uri} = req.query;
   try {
-    const page = new Page(URI);
+    const page = new Page(uri);
 
     page.create().then(() => {
       const recaptcha = new Recaptcha(page.page, page.browser);
