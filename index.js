@@ -4,6 +4,8 @@ const Recaptcha = require('./modules/recaptcha');
 const app = express();
 
 const PORT = process.env.PORT || 4000;
+const URI =
+  'https://www.rdv-prefecture.interieur.gouv.fr/rdvpref/reservation/demarche/4083/cgu/?error=errorSessionInvalide';
 
 app.get('/api', (req, res) => {
   try {
