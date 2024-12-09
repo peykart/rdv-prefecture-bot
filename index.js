@@ -1,48 +1,42 @@
-const express = require('express');
-const Page = require('./modules/page');
-const Recaptcha = require('./modules/recaptcha');
-const app = express();
+require("dotenv").config();
+const Page = require("./modules/page");
+const Recaptcha = require("./modules/recaptcha");
 
-const PORT = process.env.PORT || 4000;
-const URI =
-  'https://www.rdv-prefecture.interieur.gouv.fr/rdvpref/reservation/demarche/4083/cgu/?error=errorSessionInvalide';
+var player = require("play-sound")((opts = {}));
 
-app.get('/api', (req, res) => {
-  const {uri} = req.query;
-  try {
-    const page = new Page(uri);
+const URI = process.env.PREFECTURE_URL;
 
-    page.create().then(() => {
-      const recaptcha = new Recaptcha(page.page, page.browser);
-      // 1) Verify if recaptcha is required
-      recaptcha.checkRecaptchaRequired().then((recaptchaRequired) => {
-        // Close the page and browser when done
-        if (recaptchaRequired) {
-          // 2) If recaptcha is required, solve it
-          recaptcha.requestRecaptchaResolution().then(async (captchaId) => {
-            new Promise((resolve) => setTimeout(resolve, 50000)).then(() => {
-              console.log('Solving recaptcha...');
-              recaptcha.solveRecaptcha(page.checkAppointmentAvailability, res);
-            });
-          });
-        }
-      });
-    });
-  } catch (error) {
-    console.error('Error creating page:', error);
-
-    res.status(500).json({
-      status: 'error',
-      message: 'Error creating page.',
-      error: error,
-    });
+async function recaptcha(page) {
+  const recaptcha = new Recaptcha(page.page, page.browser);
+  const recaptchaRequired = await recaptcha.checkRecaptchaRequired();
+  if (recaptchaRequired) {
+    await recaptcha.requestRecaptchaResolution();
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+    await recaptcha.solveRecaptcha();
+    return true;
   }
-});
+  return false;
+}
 
-app.get('/', (req, res) => {
-  res.send('Render Puppeteer server is up and running!');
-});
+async function check() {
+  const page = new Page(URI);
+  await page.create();
+  async function navigate() {
+    console.log("current url", page.getUrl());
+    await recaptcha(page);
+    const hasCreneau = await page.hasCreneau();
+    if (hasCreneau) {
+      player.play("./classic.mp3", function (err) {
+        if (err) throw err;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 30000000));
+    } else {
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      await page.reload();
+      await navigate();
+    }
+  }
+  await navigate();
+}
 
-app.listen(PORT, () => {
-  console.log(`Listening on port ${PORT}`);
-});
+check();

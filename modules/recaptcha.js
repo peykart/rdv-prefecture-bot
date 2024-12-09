@@ -1,10 +1,9 @@
-const { default: axios } = require('axios');
+const { default: axios } = require("axios");
 
-const URL_ASK_RECAPTCHA = 'https://2captcha.com/in.php';
-const URL_SUBMIT_RECAPTCHA = 'https://2captcha.com/res.php';
-
-const CAPTCHA_ID = '#captchaFR_CaptchaImage';
-const SECRET_KEY = 'd7889c8cfa4abe9811f324b22a7be8ca';
+const URL_ASK_RECAPTCHA = "https://2captcha.com/in.php";
+const URL_SUBMIT_RECAPTCHA = "https://2captcha.com/res.php";
+const CAPTCHA_ID = process.env.CAPTCHA_ID;
+const SECRET_KEY = process.env.CAPTCHA_SECRET_KEY;
 
 class Recaptcha {
   constructor(page, browser) {
@@ -20,7 +19,7 @@ class Recaptcha {
       return document.body.textContent;
     });
 
-    const recaptchaRequired = body.includes('code de sécurité');
+    const recaptchaRequired = body.includes("code de sécurité");
 
     this.recaptchaRequired = recaptchaRequired;
     return recaptchaRequired;
@@ -32,40 +31,43 @@ class Recaptcha {
       const captchaImage = await this.page.waitForSelector(CAPTCHA_ID);
 
       const imageSrc = await captchaImage?.evaluate((el) => el.src);
+      console.log({ imageSrc });
 
       if (imageSrc) {
         const newPage = await this.browser.newPage();
         await newPage.goto(imageSrc);
 
-        const base64Image = await newPage.screenshot({ encoding: 'base64' });
+        const base64Image = await newPage.screenshot({ encoding: "base64" });
 
         // Send imageBase64 to a service that solves the captcha
         const data = {
-          method: 'base64',
+          method: "base64",
           body: base64Image,
           key: SECRET_KEY,
         };
 
         const response = await axios.post(URL_ASK_RECAPTCHA, data);
-        // If the response contains 'OK', the captcha was successfully sent to the service
-        if (response.data.includes('OK')) {
-          // Get the captcha ID from the response
-          const captchaId = response.data.split('|')[1];
 
+        console.log({ response: response.data });
+        // If the response contains 'OK', the captcha was successfully sent to the service
+        if (response.data.includes("OK")) {
+          // Get the captcha ID from the response
+          const captchaId = response.data.split("|")[1];
+          newPage.close();
           return (this.captchaId = captchaId);
         }
-
+        newPage.close();
         // If the response does not contain 'OK', throw an error
-        throw new Error('Error while requesting captcha resolution.');
+        throw new Error("Error while requesting captcha resolution.");
       }
     }
   }
 
-  async solveRecaptcha(checkAppointmentAvailability, res) {
+  async solveRecaptcha() {
     if (this.captchaId) {
       const data = {
         key: SECRET_KEY,
-        action: 'get',
+        action: "get",
         id: this.captchaId,
       };
 
@@ -73,69 +75,27 @@ class Recaptcha {
         params: data,
       });
 
-      if (response.data.includes('CAPCHA_NOT_READY')) {
-        console.log('Captcha not ready. Retrying in 2 seconds...');
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        this.solveRecaptcha();
+      if (response.data.includes("CAPCHA_NOT_READY")) {
+        console.log("Captcha not ready. Retrying in 2 seconds...");
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+        await this.solveRecaptcha();
       }
 
       // If the response contains 'OK', the captcha was successfully solved
-      if (response.data.includes('OK')) {
-        console.log('Captcha solved:', response.data);
+      if (response.data.includes("OK")) {
+        console.log("Captcha solved:", response.data);
         // Get the captcha solution from the response
-        const captchaSolution = response.data.split('|')[1];
+        const captchaSolution = response.data.split("|")[1];
 
         // Fill the captcha input with the solution
-        await this.page.type('#captchaFormulaireExtInput', captchaSolution);
+        await this.page.type("#captchaFormulaireExtInput", captchaSolution);
         await new Promise((resolve) => setTimeout(resolve, 100));
-        await this.page.click('button[type=submit]');
+        await this.page.click("button[type=submit]");
 
         await new Promise((resolve) => setTimeout(resolve, 1000));
-
-        const content = await this.page.content();
-        console.log(content);
-        const criteriaRegex = /"critere":\s*(\{[^}]*\})/;
-        const match = criteriaRegex.exec(content);
-
-        // Initialize an object to store the criteria
-        let criteria = null;
-
-        // If a match was found
-        if (match && match[1]) {
-          try {
-            // Parse the found JSON to get the criteria object
-            criteria = JSON.parse(match[1]);
-          } catch (error) {
-            // Log an error message if the JSON parsing fails
-            console.error('Error parsing criteria:', error);
-          }
-        }
-
-        if (!criteria || criteria.datePremiereDispo === '') {
-          console.log(
-            'No appointment available from this date. Please try again later.'
-          );
-
-          await this.page.close();
-
-          // If no appointments are available according to the criteria, reload the page and check again
-          return res.status(200).json({
-            status: 'success',
-            appointmentAvailable: false,
-            message: `No appointment available from this date. Please try again later.`,
-          });
-        }
-
-        await this.page.close();
-
-        // If appointments may be available
-        res.status(200).json({
-          status: 'success',
-          appointmentAvailable: true,
-          message: `Appointments available between ${criteria.dateMin} and ${criteria.dateMax}. `,
-        });
+        return true;
       }
-      return response.data;
+      return false;
     }
   }
 }

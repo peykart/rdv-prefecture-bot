@@ -4,8 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node index"
+    "prettier": "prettier --write .",
+    "start": "node index",
+    "knip": "knip"
   },
   "keywords": [],
   "author": "",
@@ -13,7 +14,13 @@
   "dependencies": {
     "axios": "^1.7.2",
     "dotenv": "^16.0.3",
-    "express": "^4.18.2",
-    "puppeteer": "^19.7.2"
+    "play-sound": "^1.1.6",
+    "puppeteer": "^23.10.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "knip": "^5.39.2",
+    "prettier": "^3.3.3",
+    "typescript": "^5.7.2"
   }
 }

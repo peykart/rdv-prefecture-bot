@@ -1,5 +1,4 @@
-const puppeteer = require('puppeteer');
-require('dotenv').config();
+const puppeteer = require("puppeteer");
 
 class Page {
   constructor(uri) {
@@ -9,17 +8,18 @@ class Page {
   }
 
   async create() {
+    console.log('omar', puppeteer.executablePath());
     const options = {
+      headless: true,
+      executablePath: puppeteer.executablePath(),
       args: [
-        '--disable-setuid-sandbox',
-        '--no-sandbox',
-        '--single-process',
-        '--no-zygote',
+        "--no-sandbox",
+        "--disable-gpu",
       ],
-      executablePath:
-        process.env.NODE_ENV === 'production'
-          ? process.env.PUPPETEER_EXECUTABLE_PATH
-          : puppeteer.executablePath(),
+      // executablePath:
+      //   process.env.NODE_ENV === "production"
+      //     ? process.env.PUPPETEER_EXECUTABLE_PATH
+      //     : puppeteer.executablePath(),
     };
 
     const browser = await puppeteer.launch(options);
@@ -34,11 +34,38 @@ class Page {
     await this.browser.close();
   }
 
-  async checkAppointmentAvailability(page) {
-    console.log(page);
+  async reload() {
+    await this.page.reload({
+      waitUntil: "domcontentloaded",
+    });
+  }
 
-    const content = await page.content();
-    console.log(content);
+  async searchText(text) {
+    const body = await this.page.evaluate(() => {
+      return document.body.textContent;
+    });
+
+    return body.includes(text);
+  }
+
+  getUrl() {
+    return this.page.url();
+  }
+
+  async isFirstStep() {
+    return this.searchText("Constituez votre dossier");
+  }
+
+  async isSecondStep() {
+    return (
+      this.searchText("Choisissez votre créneau") ||
+      this.searchText("Aucun créneau disponible")
+    );
+  }
+
+  async checkAppointmentAvailability() {
+    const content = await this.page.content();
+    // console.log(content);
     const criteriaRegex = /"critere":\s*(\{[^}]*\})/;
     const match = criteriaRegex.exec(content);
 
@@ -52,32 +79,31 @@ class Page {
         criteria = JSON.parse(match[1]);
       } catch (error) {
         // Log an error message if the JSON parsing fails
-        console.error('Error parsing criteria:', error);
+        console.error("Error parsing criteria:", error);
       }
     }
 
-    if (!criteria || criteria.datePremiereDispo === '') {
+    console.log({ criteria });
+
+    if (!criteria || criteria.datePremiereDispo === "") {
       console.log(
-        'No appointment available from this date. Please try again later.'
+        "No appointment available from this date. Please try again later.",
       );
-
-      await page.close();
-
-      // If no appointments are available according to the criteria, reload the page and check again
-      return res.status(200).json({
-        status: 'success',
-        appointmentAvailable: false,
-        message: `No appointment available from this date. Please try again later.`,
-      });
+      return false;
     }
+    return true;
+  }
 
-    await page.close();
-
-    // If appointments may be available
-    res.status(200).json({
-      status: 'success',
-      appointmentAvailable: true,
-      message: `Appointments available between ${criteria.dateMin} and ${criteria.dateMax}. `,
+  async hasCreneau() {
+    return await this.page.evaluate(() => {
+      const firstCreneauBtn = document.querySelector(
+        ".row.cellule.justify-center.radio-card label",
+      );
+      if (firstCreneauBtn !== null) {
+        firstCreneauBtn.click();
+        return true;
+      }
+      return false;
     });
   }
 }
