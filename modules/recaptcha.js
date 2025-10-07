@@ -25,43 +25,55 @@ class Recaptcha {
     return recaptchaRequired;
   }
 
-  async requestRecaptchaResolution() {
-    if (this.recaptchaRequired) {
-      // Download the captcha image and send it to a service that solves it
-      const captchaImage = await this.page.waitForSelector(CAPTCHA_ID);
-
-      const imageSrc = await captchaImage?.evaluate((el) => el.src);
-      console.log({ imageSrc });
-
-      if (imageSrc) {
-        const newPage = await this.browser.newPage();
-        await newPage.goto(imageSrc);
-
-        const base64Image = await newPage.screenshot({ encoding: "base64" });
-
-        // Send imageBase64 to a service that solves the captcha
-        const data = {
-          method: "base64",
-          body: base64Image,
-          key: SECRET_KEY,
-        };
-
-        const response = await axios.post(URL_ASK_RECAPTCHA, data);
-
-        console.log({ response: response.data });
-        // If the response contains 'OK', the captcha was successfully sent to the service
-        if (response.data.includes("OK")) {
-          // Get the captcha ID from the response
-          const captchaId = response.data.split("|")[1];
-          newPage.close();
-          return (this.captchaId = captchaId);
-        }
-        newPage.close();
-        // If the response does not contain 'OK', throw an error
-        throw new Error("Error while requesting captcha resolution.");
-      }
+async requestRecaptchaResolution() {
+  if (this.recaptchaRequired) {
+    // Wait for captcha image to appear on page (up to 10 seconds)
+    try {
+      await this.page.waitForSelector('.captcha img', { timeout: 10000 });
+    } catch (error) {
+      console.error('Captcha image element did not appear within timeout');
+      throw new Error('Captcha image not found on page');
     }
+
+    const imageSrc = await this.page.evaluate(() => {
+      let img = document.querySelector('.captcha img');
+      if (!img) {
+        img = document.querySelector('img[src^="data:image"]');
+      }
+      if (img && img.src && img.src.startsWith('data:image')) {
+        return img.src;
+      }
+      return '';
+    });
+    console.log('Captcha imageSrc found');
+
+    if (!imageSrc) {
+      throw new Error("Captcha image not found or not base64-encoded on this page.");
+    }
+
+    const base64Data = imageSrc.split(',')[1];
+    if (!base64Data) {
+      throw new Error("Captcha base64 image data missing after splitting src.");
+    }
+
+    const data = {
+      method: 'base64',
+      body: base64Data,
+      key: SECRET_KEY,
+    };
+
+    const response = await axios.post(URL_ASK_RECAPTCHA, data);
+    console.log({ response: response.data });
+
+    if (response.data.includes('OK')) {
+      const captchaId = response.data.split('|')[1];
+      return (this.captchaId = captchaId);
+    }
+
+    throw new Error('Error while requesting captcha resolution.');
   }
+}
+
 
   async solveRecaptcha() {
     if (this.captchaId) {
