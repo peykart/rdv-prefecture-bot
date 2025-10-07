@@ -4,8 +4,9 @@ This bot continuously checks for available appointment slots at a French prefect
 
 ## Requirements
 
-- Node.js installed
+- [Node.js](https://nodejs.org/) installed
 - A [2Captcha](https://2captcha.com/enterpage) account
+- Telegram app
 
 ## Setup
 
